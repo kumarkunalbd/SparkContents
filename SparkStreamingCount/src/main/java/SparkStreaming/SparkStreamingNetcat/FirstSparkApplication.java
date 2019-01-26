@@ -17,6 +17,8 @@ public class FirstSparkApplication {
 		jssc.start();
 		jssc.awaitTermination();
 		jssc.close();
+		
+		
 	}
 
 }
