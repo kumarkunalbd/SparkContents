@@ -2,6 +2,7 @@ package SparkStreaming.SparkStreamingNetcat;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.Optional;
+import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaPairDStream;
@@ -19,12 +20,11 @@ public class FirstSparkApplication {
 
 	public static void main(String[] args) throws InterruptedException {
 		SparkConf conf = new SparkConf().setMaster("local[*]").setAppName("FirstSparkApplication");
-		JavaStreamingContext jssc = new JavaStreamingContext(conf, Durations.seconds(5));
-		jssc.checkpoint("checkpoint_dir");
+		JavaStreamingContext jssc = new JavaStreamingContext(conf, Durations.seconds(1));
+		//jssc.checkpoint("checkpoint_dir");
 		Logger.getRootLogger().setLevel(Level.ERROR);
 		JavaReceiverInputDStream<String> lines = jssc.socketTextStream("localhost", 9999);
-		//lines.print();
-		JavaDStream<String> words = lines.flatMap(x->Arrays.asList(x.split(" ")).iterator());
+		/*JavaDStream<String> words = lines.flatMap(x->Arrays.asList(x.split(" ")).iterator());
 		JavaPairDStream<String, Integer> pairs = words.mapToPair(s -> new Tuple2<>(s, 1));
 		JavaPairDStream<String, Integer> updatedPairs = pairs.updateStateByKey((values,currentState)->{
 			int sum = currentState.or(0);
@@ -34,7 +34,8 @@ public class FirstSparkApplication {
 			return Optional.of(sum);
 			
 		});
-		updatedPairs.print();
+		updatedPairs.print();*/
+		lines.window(Durations.seconds(6),Durations.seconds(4)).print();
 		jssc.start();
 		jssc.awaitTermination();
 		jssc.close();
