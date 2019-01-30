@@ -38,24 +38,31 @@ public class FirstSparkApplication {
 		updatedPairs.print();*/
 		//lines.window(Durations.seconds(6),Durations.seconds(4)).print();
 		/* Implementing window operations*/
-		Function2<String,String, String> reduceFunct = new Function2<String, String, String>() {
+		Function2<Integer,Integer, Integer> reduceFunct = new Function2<Integer, Integer, Integer>() {
 			@Override 
-			public String call(String str1, String str2) throws Exception {
-				return "Window is filled";
+			public Integer call(Integer valuePresent, Integer valueIncoming) throws Exception {
+				System.out.println("Summary function is running");
+				System.out.println(valuePresent+"+"+valueIncoming);
+				return valuePresent+valueIncoming;
+				
 			}
 		};
 		
-		Function2<String,String, String> invReduceFunct = new Function2<String, String, String>() {
+		Function2<Integer,Integer, Integer> invReduceFunct = new Function2<Integer,Integer, Integer>() {
 			@Override 
-			public String call(String str1, String str2) throws Exception {
-				return "Window is empty";
+			public Integer call(Integer valuePresent, Integer valueOutgoing) throws Exception {
+				System.out.println("Inverse function is running");
+				System.out.println(valuePresent+"-"+valueOutgoing);
+				return valuePresent-valueOutgoing;
 			}
 		};
 		JavaReceiverInputDStream<String> lines = jssc.socketTextStream("localhost", 9999);
 		//lines.flatMap(line -> Arrays.asList(line.split(​" "​)).iterator()).reduceByWindow(reduceFunc, invReduceFunc, Durations.seconds(​10​), Durations.seconds(​6​)).print();
-		lines.flatMap(line -> Arrays.asList(line.split("")).iterator())
-			.reduceByWindow(reduceFunct, invReduceFunct, Durations.seconds(10), Durations.seconds(6))
-			.print(); 
+		lines.flatMap(line -> Arrays.asList(line.split(" ")).iterator())
+					.mapToPair(line -> new Tuple2<>(line, 1))
+					.reduceByKeyAndWindow(reduceFunct, invReduceFunct, Durations.seconds(10), Durations.seconds(6))
+					.print();
+		
 		jssc.start();
 		jssc.awaitTermination();
 		jssc.close();
