@@ -10,10 +10,17 @@ import org.apache.spark.streaming.api.java.JavaPairDStream;
 import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import models.StockPrice;
 import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.log4j.*;
 
@@ -57,16 +64,33 @@ public class Analyser {
 		};
 		JavaDStream<String> lines = jssc.textFileStream("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/NSYE_Data-12Feb2");
 		lines.print();
-		//lines.flatMap(line -> Arrays.asList(line.split(​" "​)).iterator()).reduceByWindow(reduceFunc, invReduceFunc, Durations.seconds(​10​), Durations.seconds(​6​)).print();
-		/*lines.flatMap(line -> Arrays.asList(line.split(" ")).iterator())
-					.mapToPair(line -> new Tuple2<>(line, 1))
-					.reduceByKeyAndWindow(reduceFunct, invReduceFunct, Durations.seconds(10), Durations.seconds(6))
-					.print();*/
-		
+		JavaDStream<Map<String, StockPrice>> stockStream = Analyser.convertIntoDStream(lines);
+		stockStream.print();
 		jssc.start();
 		jssc.awaitTermination();
 		jssc.close();
 
 	}
+	
+	private static JavaDStream<Map<String, StockPrice>>convertIntoDStream(JavaDStream<String> json){
+		
+		return json.map(x -> {
+			ObjectMapper mapper = new ObjectMapper();
+			TypeReference<List<StockPrice>> mapType = new
+			TypeReference<List<StockPrice>>() {
+			};
+			List<StockPrice> list = mapper.readValue(x, mapType);
+			Map<String, StockPrice> map = new HashMap<>();
+			for (StockPrice sp : list) {
+			map.put(sp.getSymbol(), sp);
+			}
+			return map;
+			});
+	}
+	
+	/*private static JavaPairDStream<String, PriceData> getWindowDStream(
+			JavaDStream<Map<String, StockPrice>> stockStream){
+		
+	}*/
 
 }
