@@ -3,6 +3,7 @@ package Analysis;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.Optional;
 import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.JavaDStream;
@@ -13,6 +14,7 @@ import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import models.PriceData;
 import models.StockPrice;
 import scala.Tuple2;
 
@@ -28,8 +30,15 @@ public class Analyser {
 
 	public static void main(String[] args) throws InterruptedException{
 		// TODO Auto-generated method stub
-		SparkConf conf = new SparkConf().setMaster("local[*]").setAppName("StockAnalyser");
-		JavaStreamingContext jssc = new JavaStreamingContext(conf, Durations.seconds(60));
+		SparkConf confInitial = new SparkConf().setMaster("local[*]").setAppName("StockAnalyser");
+		confInitial.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+		confInitial.set("spark.kryo.registrator","models.StockKryoRegistrator");
+		// force kryo to throw an exception when it tries to serialize 
+		// an unregistered class
+		confInitial.set("spark.kryo.registrationRequired","true");
+		
+		
+		JavaStreamingContext jssc = new JavaStreamingContext(confInitial, Durations.seconds(60));
 		jssc.checkpoint("checkpoint_dir");
 		Logger.getRootLogger().setLevel(Level.ERROR);
 		//JavaReceiverInputDStream<String> lines = jssc.socketTextStream("localhost", 9999);
@@ -62,9 +71,10 @@ public class Analyser {
 				return valuePresent-valueOutgoing;
 			}
 		};
-		JavaDStream<String> lines = jssc.textFileStream("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/NSYE_Data-12Feb2");
+		JavaDStream<String> lines = jssc.textFileStream("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination");
 		lines.print();
 		JavaDStream<Map<String, StockPrice>> stockStream = Analyser.convertIntoDStream(lines);
+		JavaPairDStream<String, PriceData> windowStockDStream = getWindowDStream(stockStream);
 		stockStream.print();
 		jssc.start();
 		jssc.awaitTermination();
@@ -88,9 +98,71 @@ public class Analyser {
 			});
 	}
 	
-	/*private static JavaPairDStream<String, PriceData> getWindowDStream(
-			JavaDStream<Map<String, StockPrice>> stockStream){
+	private static JavaPairDStream<String, PriceData> getWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
+		//JavaPairDStream< String, PriceData> stockPriceStream 
+		JavaPairDStream<String, PriceData> stockPriceMSFTStream = getPriceDStream(stockStream, "MSFT");
+		JavaPairDStream<String, PriceData> stockPriceGoogleStream= getPriceDStream(stockStream, "GOOGL");
+		JavaPairDStream<String, PriceData> stockPriceADBEStream = getPriceDStream(stockStream, "ADBE");
+		JavaPairDStream<String, PriceData> stockPriceFBStream = getPriceDStream(stockStream, "FB");
 		
-	}*/
+		JavaPairDStream<String, PriceData> windowMSFTDStream = stockPriceMSFTStream.reduceByKeyAndWindow(
+				SUM_REDUCER_PRICE_DATA,
+				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
+				Durations.minutes(5));
+		JavaPairDStream<String, PriceData> windowGoogDStream =
+				stockPriceGoogleStream.reduceByKeyAndWindow(
+				SUM_REDUCER_PRICE_DATA,
+				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
+				Durations.minutes(5));
+		
+		JavaPairDStream<String, PriceData> windowAdbDStream =
+				stockPriceADBEStream.reduceByKeyAndWindow(
+				SUM_REDUCER_PRICE_DATA,
+				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
+				Durations.minutes(5));
+		
+		JavaPairDStream<String, PriceData> windowFBDStream =
+				stockPriceFBStream.reduceByKeyAndWindow(
+				SUM_REDUCER_PRICE_DATA,
+				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
+				Durations.minutes(5));
+		windowMSFTDStream =
+				windowMSFTDStream.union(windowGoogDStream).union(windowAdbDStream).union(windowFBDStream);
+		
+		
+		return windowMSFTDStream;
+	}
+	
+	private static JavaPairDStream<String, PriceData> getPriceDStream(JavaDStream<Map<String, StockPrice>> stockStream,String symbol){
+
+		JavaPairDStream<String, PriceData> stockPriceStream = stockStream.mapToPair(new PairFunction<Map<String, StockPrice>,String, PriceData>() {
+			public Tuple2<String, PriceData> call(Map<String, StockPrice> map) throws Exception {
+				if (map.containsKey(symbol)) {
+					return new Tuple2<String,PriceData>(symbol, map.get(symbol).getPriceData());
+				} else {
+					return new Tuple2<String,PriceData>(symbol, new PriceData());
+				}
+			}
+		});
+
+		return stockPriceStream;
+
+	}
+	
+	private static Function2<PriceData, PriceData, PriceData>
+	SUM_REDUCER_PRICE_DATA = (a, b) -> {
+	PriceData pd = new PriceData();
+	pd.setOpen(a.getOpen() + b.getOpen());
+	pd.setClose(a.getClose() + b.getClose());
+	return pd;
+	};
+	
+	private static Function2<PriceData, PriceData, PriceData>
+	DIFF_REDUCER_PRICE_DATA = (a, b) -> {
+	PriceData pd = new PriceData();
+	pd.setOpen(a.getOpen() - b.getOpen());
+	pd.setClose(a.getClose() - b.getClose());
+	return pd;
+	};
 
 }

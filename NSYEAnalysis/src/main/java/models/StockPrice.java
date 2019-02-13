@@ -5,7 +5,7 @@ import java.util.Date;
 public class StockPrice {
 	private PriceData priceData;
 	private String symbol;
-	private Date timestamp;
+	private String timestamp;
 	public PriceData getPriceData() {
 		return priceData;
 	}
@@ -18,10 +18,10 @@ public class StockPrice {
 	public void setSymbol(String symbol) {
 		this.symbol = symbol;
 	}
-	public Date getTimestamp() {
+	public String getTimestamp() {
 		return timestamp;
 	}
-	public void setTimestamp(Date timestamp) {
+	public void setTimestamp(String timestamp) {
 		this.timestamp = timestamp;
 	}
 	
