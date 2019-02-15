@@ -10,6 +10,7 @@ import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaPairDStream;
 import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
+//import scala.collection.mutable.WrappedArray.ofRef;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -74,8 +75,9 @@ public class Analyser {
 		JavaDStream<String> lines = jssc.textFileStream("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination");
 		lines.print();
 		JavaDStream<Map<String, StockPrice>> stockStream = Analyser.convertIntoDStream(lines);
-		JavaPairDStream<String, PriceData> windowStockDStream = getWindowDStream(stockStream);
 		stockStream.print();
+		JavaPairDStream<String, PriceData> windowStockDStream = getWindowDStream(stockStream);
+		windowStockDStream.print();
 		jssc.start();
 		jssc.awaitTermination();
 		jssc.close();
@@ -85,11 +87,14 @@ public class Analyser {
 	private static JavaDStream<Map<String, StockPrice>>convertIntoDStream(JavaDStream<String> json){
 		
 		return json.map(x -> {
+			System.out.println(x);
 			ObjectMapper mapper = new ObjectMapper();
 			TypeReference<List<StockPrice>> mapType = new
 			TypeReference<List<StockPrice>>() {
 			};
+			//System.out.println("maptype:"+mapType);
 			List<StockPrice> list = mapper.readValue(x, mapType);
+			System.out.println(list);
 			Map<String, StockPrice> map = new HashMap<>();
 			for (StockPrice sp : list) {
 			map.put(sp.getSymbol(), sp);
