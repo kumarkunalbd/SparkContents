@@ -31,6 +31,8 @@ public class Analyser {
 
 	public static void main(String[] args) throws InterruptedException{
 		// TODO Auto-generated method stub
+		String inputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination";
+        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles2";
 		SparkConf confInitial = new SparkConf().setMaster("local[*]").setAppName("StockAnalyser");
 		confInitial.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
 		confInitial.set("spark.kryo.registrator","models.StockKryoRegistrator");
@@ -75,9 +77,16 @@ public class Analyser {
 		JavaDStream<String> lines = jssc.textFileStream("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination");
 		lines.print();
 		JavaDStream<Map<String, StockPrice>> stockStream = Analyser.convertIntoDStream(lines);
-		stockStream.print();
+		//stockStream.print();
 		JavaPairDStream<String, PriceData> windowStockDStream = getWindowDStream(stockStream);
 		windowStockDStream.print();
+		windowStockDStream.foreachRDD(rdd ->{
+			if(!rdd.isEmpty()) {
+				//rdd.saveAsTextFile("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles");
+				rdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_" + System.currentTimeMillis());
+			}
+		});
+		//windowStockDStream.saveAsHadoopFiles(prefix, suffix);
 		jssc.start();
 		jssc.awaitTermination();
 		jssc.close();
@@ -87,14 +96,14 @@ public class Analyser {
 	private static JavaDStream<Map<String, StockPrice>>convertIntoDStream(JavaDStream<String> json){
 		
 		return json.map(x -> {
-			System.out.println(x);
+			//System.out.println(x);
 			ObjectMapper mapper = new ObjectMapper();
 			TypeReference<List<StockPrice>> mapType = new
 			TypeReference<List<StockPrice>>() {
 			};
 			//System.out.println("maptype:"+mapType);
 			List<StockPrice> list = mapper.readValue(x, mapType);
-			System.out.println(list);
+			//System.out.println(list);
 			Map<String, StockPrice> map = new HashMap<>();
 			for (StockPrice sp : list) {
 			map.put(sp.getSymbol(), sp);
@@ -106,14 +115,19 @@ public class Analyser {
 	private static JavaPairDStream<String, PriceData> getWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
 		//JavaPairDStream< String, PriceData> stockPriceStream 
 		JavaPairDStream<String, PriceData> stockPriceMSFTStream = getPriceDStream(stockStream, "MSFT");
+		stockPriceMSFTStream.print();
 		JavaPairDStream<String, PriceData> stockPriceGoogleStream= getPriceDStream(stockStream, "GOOGL");
+		stockPriceGoogleStream.print();
 		JavaPairDStream<String, PriceData> stockPriceADBEStream = getPriceDStream(stockStream, "ADBE");
+		stockPriceADBEStream.print();
 		JavaPairDStream<String, PriceData> stockPriceFBStream = getPriceDStream(stockStream, "FB");
+		stockPriceFBStream.print();
 		
 		JavaPairDStream<String, PriceData> windowMSFTDStream = stockPriceMSFTStream.reduceByKeyAndWindow(
 				SUM_REDUCER_PRICE_DATA,
 				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
 				Durations.minutes(5));
+		
 		JavaPairDStream<String, PriceData> windowGoogDStream =
 				stockPriceGoogleStream.reduceByKeyAndWindow(
 				SUM_REDUCER_PRICE_DATA,
@@ -141,11 +155,20 @@ public class Analyser {
 	private static JavaPairDStream<String, PriceData> getPriceDStream(JavaDStream<Map<String, StockPrice>> stockStream,String symbol){
 
 		JavaPairDStream<String, PriceData> stockPriceStream = stockStream.mapToPair(new PairFunction<Map<String, StockPrice>,String, PriceData>() {
+			/**
+			 * Adding serialization
+			 */
+			private static final long serialVersionUID = 1L;
+
 			public Tuple2<String, PriceData> call(Map<String, StockPrice> map) throws Exception {
 				if (map.containsKey(symbol)) {
-					return new Tuple2<String,PriceData>(symbol, map.get(symbol).getPriceData());
+					Tuple2<String, PriceData> strPriceTuple = new Tuple2<String,PriceData>(symbol, map.get(symbol).getPriceData());
+					return strPriceTuple;
+					//return new Tuple2<String,PriceData>(symbol, map.get(symbol).getPriceData());
 				} else {
-					return new Tuple2<String,PriceData>(symbol, new PriceData());
+					Tuple2<String, PriceData> strPriceTuple = new Tuple2<String,PriceData>(symbol, new PriceData());
+					return strPriceTuple;
+					//return new Tuple2<String,PriceData>(symbol, new PriceData());
 				}
 			}
 		});
