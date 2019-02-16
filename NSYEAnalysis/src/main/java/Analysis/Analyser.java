@@ -1,6 +1,7 @@
 package Analysis;
 
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.Optional;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
@@ -15,6 +16,7 @@ import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import models.AveragePrice;
 import models.PriceData;
 import models.StockPrice;
 import scala.Tuple2;
@@ -32,7 +34,7 @@ public class Analyser {
 	public static void main(String[] args) throws InterruptedException{
 		// TODO Auto-generated method stub
 		String inputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination";
-        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles2";
+        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles4";
 		SparkConf confInitial = new SparkConf().setMaster("local[*]").setAppName("StockAnalyser");
 		confInitial.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
 		confInitial.set("spark.kryo.registrator","models.StockKryoRegistrator");
@@ -58,34 +60,31 @@ public class Analyser {
 		updatedPairs.print();*/
 		//lines.window(Durations.seconds(6),Durations.seconds(4)).print();
 		/* Implementing window operations*/
-		Function2<Integer,Integer, Integer> reduceFunct = new Function2<Integer, Integer, Integer>() {
-			public Integer call(Integer valuePresent, Integer valueIncoming) throws Exception {
-				System.out.println("Summary function is running");
-				System.out.println(valuePresent+"+"+valueIncoming);
-				return valuePresent+valueIncoming;
-				
-			}
-		};
-		
-		Function2<Integer,Integer, Integer> invReduceFunct = new Function2<Integer,Integer, Integer>() {
-			public Integer call(Integer valuePresent, Integer valueOutgoing) throws Exception {
-				System.out.println("Inverse function is running");
-				System.out.println(valuePresent+"-"+valueOutgoing);
-				return valuePresent-valueOutgoing;
-			}
-		};
 		JavaDStream<String> lines = jssc.textFileStream("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination");
 		lines.print();
 		JavaDStream<Map<String, StockPrice>> stockStream = Analyser.convertIntoDStream(lines);
 		//stockStream.print();
-		JavaPairDStream<String, PriceData> windowStockDStream = getWindowDStream(stockStream);
-		windowStockDStream.print();
+		//JavaPairDStream<String, PriceData> windowStockDStream = getWindowDStream(stockStream);
+		//JavaPairDStream<String, PriceData> windowStockDStream = StreamTransformer.getPDWindowDStream(stockStream);
+		JavaPairDStream<String, Tuple2<PriceData, Long>> windowStockDStream = StreamTransformer.getStockPDandCountWindowDStream(stockStream);
+		
 		windowStockDStream.foreachRDD(rdd ->{
 			if(!rdd.isEmpty()) {
 				//rdd.saveAsTextFile("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles");
-				rdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_" + System.currentTimeMillis());
+				//JavaPairRDD<String, Double> closingPriceRdd = Analyser.getActualPriceRdd(rdd, "close");
+				JavaPairRDD<String,Tuple2<Double,Long>> closingPriceAndCountRdd = StreamTransformer.getActualPriceAndCounntRdd(rdd, "close");
+				closingPriceAndCountRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_Closinng_Count_" + System.currentTimeMillis());
 			}
 		});
+		/*JavaPairDStream<Tuple2<String, PriceData>,Long> windowStockDStreamCount = Analyser.getWindowDStream(stockStream);
+		windowStockDStreamCount.foreachRDD(rdd ->{
+			if(!rdd.isEmpty()) {
+				rdd.saveAsTextFile("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles3");
+				JavaPairRDD<String, Double> closingPriceRdd = Analyser.getAveragePriceRdd(rdd, "close");
+				closingPriceRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_Average_" + System.currentTimeMillis());
+				
+			}
+		});*/
 		//windowStockDStream.saveAsHadoopFiles(prefix, suffix);
 		jssc.start();
 		jssc.awaitTermination();
@@ -112,27 +111,30 @@ public class Analyser {
 			});
 	}
 	
-	private static JavaPairDStream<String, PriceData> getWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
+	private static JavaPairDStream<Tuple2<String, PriceData>,Long> getWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
 		//JavaPairDStream< String, PriceData> stockPriceStream 
 		JavaPairDStream<String, PriceData> stockPriceMSFTStream = getPriceDStream(stockStream, "MSFT");
-		stockPriceMSFTStream.print();
+		//stockPriceMSFTStream.print();
 		JavaPairDStream<String, PriceData> stockPriceGoogleStream= getPriceDStream(stockStream, "GOOGL");
-		stockPriceGoogleStream.print();
+		//stockPriceGoogleStream.print();
 		JavaPairDStream<String, PriceData> stockPriceADBEStream = getPriceDStream(stockStream, "ADBE");
-		stockPriceADBEStream.print();
+		//stockPriceADBEStream.print();
 		JavaPairDStream<String, PriceData> stockPriceFBStream = getPriceDStream(stockStream, "FB");
-		stockPriceFBStream.print();
+		//stockPriceFBStream.print();
 		
 		JavaPairDStream<String, PriceData> windowMSFTDStream = stockPriceMSFTStream.reduceByKeyAndWindow(
 				SUM_REDUCER_PRICE_DATA,
 				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
 				Durations.minutes(5));
 		
+		JavaPairDStream<Tuple2<String, PriceData>, Long> windowMSFTDtreamCount = windowMSFTDStream.countByValueAndWindow(Durations.minutes(10), Durations.minutes(5));
 		JavaPairDStream<String, PriceData> windowGoogDStream =
 				stockPriceGoogleStream.reduceByKeyAndWindow(
 				SUM_REDUCER_PRICE_DATA,
 				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
 				Durations.minutes(5));
+		
+		JavaPairDStream<Tuple2<String, PriceData>, Long> windowGoogDtreamCount = windowGoogDStream.countByValueAndWindow(Durations.minutes(10), Durations.minutes(5));
 		
 		JavaPairDStream<String, PriceData> windowAdbDStream =
 				stockPriceADBEStream.reduceByKeyAndWindow(
@@ -140,19 +142,23 @@ public class Analyser {
 				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
 				Durations.minutes(5));
 		
+		JavaPairDStream<Tuple2<String, PriceData>, Long> windowAdbDtreamCount = windowAdbDStream.countByValueAndWindow(Durations.minutes(10), Durations.minutes(5));
+		
 		JavaPairDStream<String, PriceData> windowFBDStream =
 				stockPriceFBStream.reduceByKeyAndWindow(
 				SUM_REDUCER_PRICE_DATA,
 				DIFF_REDUCER_PRICE_DATA, Durations.minutes(10),
 				Durations.minutes(5));
+		JavaPairDStream<Tuple2<String, PriceData>, Long> windowFBDtreamCount = windowFBDStream.countByValueAndWindow(Durations.minutes(10), Durations.minutes(5));
 		windowMSFTDStream =
 				windowMSFTDStream.union(windowGoogDStream).union(windowAdbDStream).union(windowFBDStream);
+		windowFBDtreamCount = windowFBDtreamCount.union(windowGoogDtreamCount).union(windowAdbDtreamCount).union(windowFBDtreamCount);
 		
 		
-		return windowMSFTDStream;
+		return windowFBDtreamCount;
 	}
 	
-	private static JavaPairDStream<String, PriceData> getPriceDStream(JavaDStream<Map<String, StockPrice>> stockStream,String symbol){
+	public static JavaPairDStream<String, PriceData> getPriceDStream(JavaDStream<Map<String, StockPrice>> stockStream,String symbol){
 
 		JavaPairDStream<String, PriceData> stockPriceStream = stockStream.mapToPair(new PairFunction<Map<String, StockPrice>,String, PriceData>() {
 			/**
@@ -177,7 +183,54 @@ public class Analyser {
 
 	}
 	
-	private static Function2<PriceData, PriceData, PriceData>
+	public static JavaPairRDD<String, Double> getActualPriceRdd(JavaPairRDD<String, PriceData> stockPriceRdd, String priceType){
+		JavaPairRDD<String, Double> actualPriceRdd = stockPriceRdd.mapToPair(new PairFunction<Tuple2<String,PriceData>, String, Double>() {
+			private static final long serialVersionUID = 1L;
+			
+			public Tuple2<String, Double> call(Tuple2<String,PriceData> aStockPD) throws Exception{
+				Double actualPrice=(double) 0;
+				
+				String symbol = aStockPD._1;
+				PriceData stockPDonly = aStockPD._2;
+				if(priceType.equalsIgnoreCase("close")) {
+					actualPrice = stockPDonly.getClose();
+				}else if(priceType.equalsIgnoreCase("open")) {
+					actualPrice = stockPDonly.getOpen();
+				}
+				return new Tuple2<String, Double>(symbol, actualPrice);
+			}
+			
+		});
+		return actualPriceRdd;
+	}
+	
+	private static JavaPairRDD<String, Double> getAveragePriceRdd(JavaPairRDD<Tuple2<String, PriceData>, Long> stockPriceCountRdd, String priceType){
+		
+		JavaPairRDD<String, Double> averagePriceRdd = stockPriceCountRdd.mapToPair(new PairFunction<Tuple2<Tuple2<String,PriceData>,Long>, String, Double>() {
+			private static final long serialVersionUID = 1L;
+			
+			public Tuple2<String, Double> call(Tuple2<Tuple2<String,PriceData>,Long> aStockCount) throws Exception{
+				Double average = (double) 0;
+				Double actualPriceAggeragted = (double) 0;
+				String symbol = aStockCount._1._1;
+				Long count = aStockCount._2;
+				PriceData stockPDonly = aStockCount._1._2;
+				if(priceType.equalsIgnoreCase("close")) {
+					actualPriceAggeragted = stockPDonly.getClose();
+					average = stockPDonly.getClose()/count;
+				}else if(priceType.equalsIgnoreCase("open")) {
+					actualPriceAggeragted = stockPDonly.getOpen();
+					average = stockPDonly.getOpen()/count;
+				}
+				System.out.println("Stock :::" + symbol + " : TotalCountWindow:::"+count+" : AggregatePrice:::"+actualPriceAggeragted+" : Average:::"+average);
+				return new Tuple2<String, Double>(symbol, average);
+			}
+		});
+		
+		return averagePriceRdd;
+	}
+	
+	public static Function2<PriceData, PriceData, PriceData>
 	SUM_REDUCER_PRICE_DATA = (a, b) -> {
 	PriceData pd = new PriceData();
 	pd.setOpen(a.getOpen() + b.getOpen());
@@ -185,7 +238,7 @@ public class Analyser {
 	return pd;
 	};
 	
-	private static Function2<PriceData, PriceData, PriceData>
+	public static Function2<PriceData, PriceData, PriceData>
 	DIFF_REDUCER_PRICE_DATA = (a, b) -> {
 	PriceData pd = new PriceData();
 	pd.setOpen(a.getOpen() - b.getOpen());

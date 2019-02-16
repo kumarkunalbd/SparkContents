@@ -22,6 +22,7 @@ public class StockKryoRegistrator implements KryoRegistrator, Serializable{
 	    doRegistration(arg0, "java.util.HashMap");
 	    doRegistration(arg0, "scala.collection.mutable.WrappedArray.ofRef");
 	    doRegistration(arg0, "scala.collection.mutable.WrappedArray$ofRef");
+	    doRegistration(arg0, "models.AveragePrice");
 	 
 	}
 	
