@@ -167,6 +167,25 @@ public class StreamTransformer {
 		return actualProceAndCountRdd;
 	}
 	
+	public static JavaPairRDD<String, Double> getAveragePriceRdd(JavaPairRDD<String, Tuple2<Double, Long>> stockActualProceAndCountRdd){
+		
+		JavaPairRDD<String, Double> averagePriceRdd = stockActualProceAndCountRdd.mapToPair(new PairFunction<Tuple2<String,Tuple2<Double,Long>>, String, Double>() {
+			private static final long serialVersionUID = 1L;
+			
+			public Tuple2<String, Double> call(Tuple2<String, Tuple2<Double, Long>> aStockActualPriceAndCount) throws Exception{
+				String symbol = aStockActualPriceAndCount._1;
+				Double stockAggreagtedPrice = aStockActualPriceAndCount._2._1;
+				Long stockAggeragtedCounnt = aStockActualPriceAndCount._2._2;
+				Double stockAverage = stockAggreagtedPrice/stockAggeragtedCounnt;
+				
+				return new Tuple2<String, Double>(symbol,stockAverage);
+			}
+		}
+		);
+		
+		return averagePriceRdd;
+	}
+	
 	public static Function2<Long, Long, Long>
 	SUM_REDUCER_COUNT = (a, b) -> {
 	return a+b;

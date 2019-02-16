@@ -34,7 +34,7 @@ public class Analyser {
 	public static void main(String[] args) throws InterruptedException{
 		// TODO Auto-generated method stub
 		String inputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination";
-        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles4";
+        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles5";
 		SparkConf confInitial = new SparkConf().setMaster("local[*]").setAppName("StockAnalyser");
 		confInitial.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
 		confInitial.set("spark.kryo.registrator","models.StockKryoRegistrator");
@@ -74,6 +74,8 @@ public class Analyser {
 				//JavaPairRDD<String, Double> closingPriceRdd = Analyser.getActualPriceRdd(rdd, "close");
 				JavaPairRDD<String,Tuple2<Double,Long>> closingPriceAndCountRdd = StreamTransformer.getActualPriceAndCounntRdd(rdd, "close");
 				closingPriceAndCountRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_Closinng_Count_" + System.currentTimeMillis());
+				JavaPairRDD<String, Double> stockAverageRdd = StreamTransformer.getAveragePriceRdd(closingPriceAndCountRdd);
+				stockAverageRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_AveragePrice_Closing" + System.currentTimeMillis());
 			}
 		});
 		/*JavaPairDStream<Tuple2<String, PriceData>,Long> windowStockDStreamCount = Analyser.getWindowDStream(stockStream);
