@@ -38,7 +38,7 @@ public class Analyser {
 	public static void main(String[] args) throws InterruptedException{
 		// TODO Auto-generated method stub
 		String inputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination";
-        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles7";
+        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles8";
 		SparkConf confInitial = new SparkConf().setMaster("local[*]").setAppName("StockAnalyser");
 		
 		/**
@@ -91,12 +91,8 @@ public class Analyser {
 				JavaPairRDD<String,Double> stockAveragePriceDifference = StreamTransformer.getAveragePriceDifferenceRdd(stockClosingAvgAndOpeningAvgRdd);
 				stockAveragePriceDifference.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_AveragePrice_Difference_" + System.currentTimeMillis());
 				
-				
-				/*List<Tuple2<String, Double>> stockAveragePriceDifferenceList = stockAveragePriceDifference.top(1, new TupleSorter());
-				JavaRDD<Tuple2<String, Double>> stockAveragePriceDifferenceListRdd = jssc.sparkContext().parallelize(stockAveragePriceDifferenceList);
-				stockAveragePriceDifferenceListRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_ProfitLoss_Maximu_" + System.currentTimeMillis());*/
-				Tuple2<String, Double> stockAveragePriceDifferenceTuple = stockAveragePriceDifference.max(new TupleSorter());
-				
+				/* First Finding the Maximum Stock Tuple. Then Filterinng out that Rdd */
+				Tuple2<String, Double> stockAveragePriceDifferenceTuple = stockAveragePriceDifference.max(new TupleSorter());		
 				JavaPairRDD<String,Double> stockAveragePriceDifferenceMax = stockAveragePriceDifference.filter(new Function<Tuple2<String,Double>, Boolean>() {
 					
 					private static final long serialVersionUID = 1L;
@@ -113,35 +109,45 @@ public class Analyser {
 				}
 				);
 				stockAveragePriceDifferenceMax.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_AveragePrice_Difference_Maximum" + System.currentTimeMillis());
-				//stockAveragePriceDifferenceList.saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_ProfitLoss_Maximu" + System.currentTimeMillis());
-				//JavaPairRDD.fromJavaRDD(arg0)
 				
 			}
 		});
-		
-		
-		
-		
 
 		/**
-		 * Get Stock with maximum  profit.
-		 * @Param stockStream obtained by converting String into DSteramn of JavaDStream<Map<String, StockPrice>> 
-		 * @Return <String, Tuple2<PriceData, Long>> windowStockDStream 
-		 * @Operation windowStockDStream will be used to calculate JavaPairRDD<String, Double> stockAverageRdd in window.
+		 * Get Volume of Stock.
+		 * @Operation windowStockDStream will be used to calculate JavaPairRDD<String, Long> stockAggregated Volume in window(Size=10, sliding=10).
 		 * 
 		 */
-		
-		
-		
-		/*JavaPairDStream<Tuple2<String, PriceData>,Long> windowStockDStreamCount = Analyser.getWindowDStream(stockStream);
-		windowStockDStreamCount.foreachRDD(rdd ->{
+		JavaPairDStream<String, Double> windowStockVolumeDStream = StreamTransformer.getStockVolumeWindowDStream(stockStream);
+		windowStockVolumeDStream.foreachRDD(rdd -> {
 			if(!rdd.isEmpty()) {
-				rdd.saveAsTextFile("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles3");
-				JavaPairRDD<String, Double> closingPriceRdd = Analyser.getAveragePriceRdd(rdd, "close");
-				closingPriceRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_Average_" + System.currentTimeMillis());
-				
+				rdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_Volume_Aggregated_" + System.currentTimeMillis());
+				/* Finding stock with maximu  volume and then filetring to print its value.*/
+				Tuple2<String, Double> stockVolumeMaxTuple = rdd.max(new TupleSorter());
+				JavaPairRDD<String,Double> stockVolumeMaxRdd = rdd.filter(new Function<Tuple2<String,Double>, Boolean>() {
+					
+					private static final long serialVersionUID = 1L;
+					
+					public Boolean call(Tuple2<String, Double> aStockVolume) throws Exception{
+						String symbol = aStockVolume._1;
+						String matchinngSignal = stockVolumeMaxTuple._1;
+						if(symbol.equalsIgnoreCase(matchinngSignal)) {
+							return true;
+						}else {
+							return false;
+						}
+					}
+				}
+				);
+				stockVolumeMaxRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_Volume_Maximum" + System.currentTimeMillis());
 			}
-		});*/
+		}
+		);
+		
+		
+		
+		
+		
 		jssc.start();
 		jssc.awaitTermination();
 		jssc.close();
@@ -291,6 +297,7 @@ public class Analyser {
 	PriceData pd = new PriceData();
 	pd.setOpen(a.getOpen() + b.getOpen());
 	pd.setClose(a.getClose() + b.getClose());
+	
 	return pd;
 	};
 	

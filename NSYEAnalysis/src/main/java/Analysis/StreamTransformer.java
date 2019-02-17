@@ -3,6 +3,7 @@ package Analysis;
 import java.util.Map;
 
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.streaming.Durations;
@@ -205,6 +206,53 @@ public class StreamTransformer {
 		
 	}
 	
+	public static JavaPairDStream<String,Double> getStockVolumeWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
+		JavaPairDStream<String, Double> stockVolumeMSFTStream = StreamTransformer.getVolumeDStream(stockStream, "MSFT");
+		JavaPairDStream<String, Double> stockVolumeGoogleStream= StreamTransformer.getVolumeDStream(stockStream, "GOOGL");
+		JavaPairDStream<String, Double> stockVolumeADBEStream = StreamTransformer.getVolumeDStream(stockStream, "ADBE");
+		JavaPairDStream<String, Double> stockVolumeFBStream = StreamTransformer.getVolumeDStream(stockStream, "FB");
+		
+		JavaPairDStream<String, Double> windowMSFTVolumeDStream = stockVolumeMSFTStream.reduceByKeyAndWindow(
+				StreamTransformer.SUM_REDUCER_VOLUME,
+				StreamTransformer.DIFF_REDUCER_VOLUME, Durations.minutes(10),
+				Durations.minutes(10));
+		JavaPairDStream<String, Double> windowGoogleVolumeDStream = stockVolumeGoogleStream.reduceByKeyAndWindow(
+				StreamTransformer.SUM_REDUCER_VOLUME,
+				StreamTransformer.DIFF_REDUCER_VOLUME, Durations.minutes(10),
+				Durations.minutes(10));
+		JavaPairDStream<String, Double> windowADBEVolumeDStream = stockVolumeADBEStream.reduceByKeyAndWindow(
+				StreamTransformer.SUM_REDUCER_VOLUME,
+				StreamTransformer.DIFF_REDUCER_VOLUME, Durations.minutes(10),
+				Durations.minutes(10));
+		JavaPairDStream<String, Double> windowFBVolumeDStream = stockVolumeFBStream.reduceByKeyAndWindow(
+				StreamTransformer.SUM_REDUCER_VOLUME,
+				StreamTransformer.DIFF_REDUCER_VOLUME, Durations.minutes(10),
+				Durations.minutes(10));
+		
+		windowMSFTVolumeDStream =  windowMSFTVolumeDStream.union(windowGoogleVolumeDStream).union(windowADBEVolumeDStream).union(windowFBVolumeDStream);
+		return windowMSFTVolumeDStream;
+	}
+	
+	public static JavaPairDStream<String, Double> getVolumeDStream(JavaDStream<Map<String, StockPrice>> stockStream,String symbol){
+		
+		JavaPairDStream<String, Double> stockVolumeStream = stockStream.mapToPair(new PairFunction<Map<String,StockPrice>, String, Double>() {
+			
+			private static final long serialVersionUID = 1L;
+			
+			public Tuple2<String, Double> call(Map<String,StockPrice> map) throws Exception{
+				if(map.containsKey(symbol)) {
+					Tuple2<String, Double> stockVolume = new Tuple2<String, Double>(symbol, map.get(symbol).getPriceData().getVolume());
+					return stockVolume;
+				}else {
+					Tuple2<String, Double> stockVolume = new Tuple2<String, Double>(symbol, 0.0);
+					return stockVolume;
+				}
+			}
+		}
+		);
+		return stockVolumeStream;
+	}
+	
 	
 	
 	public static Function2<Long, Long, Long>
@@ -217,6 +265,17 @@ public class StreamTransformer {
 	return a-b;
 	};
 	
+	public static Function2<Double, Double, Double>
+	SUM_REDUCER_VOLUME = (a, b) -> {
+	return a+b;
+	};
 	
-
+	public static Function2<Double, Double, Double>
+	DIFF_REDUCER_VOLUME = (a, b) -> {
+	return a-b;
+	};
+	
+	
+	
+	
 }
