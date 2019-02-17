@@ -2,19 +2,23 @@ package Analysis;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.Optional;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaPairDStream;
+import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 //import scala.collection.mutable.WrappedArray.ofRef;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import models.TupleSorter;
 
 import models.AveragePrice;
 import models.PriceData;
@@ -34,8 +38,12 @@ public class Analyser {
 	public static void main(String[] args) throws InterruptedException{
 		// TODO Auto-generated method stub
 		String inputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination";
-        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles5";
+        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles7";
 		SparkConf confInitial = new SparkConf().setMaster("local[*]").setAppName("StockAnalyser");
+		
+		/**
+		 * Kryo Serializer being used
+		 */
 		confInitial.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
 		confInitial.set("spark.kryo.registrator","models.StockKryoRegistrator");
 		// force kryo to throw an exception when it tries to serialize 
@@ -47,18 +55,6 @@ public class Analyser {
 		jssc.checkpoint("checkpoint_dir");
 		Logger.getRootLogger().setLevel(Level.ERROR);
 		//JavaReceiverInputDStream<String> lines = jssc.socketTextStream("localhost", 9999);
-		/*JavaDStream<String> words = lines.flatMap(x->Arrays.asList(x.split(" ")).iterator());
-		JavaPairDStream<String, Integer> pairs = words.mapToPair(s -> new Tuple2<>(s, 1));
-		JavaPairDStream<String, Integer> updatedPairs = pairs.updateStateByKey((values,currentState)->{
-			int sum = currentState.or(0);
-			for (int i: values) {
-				sum += i;
-			}
-			return Optional.of(sum);
-			
-		});
-		updatedPairs.print();*/
-		//lines.window(Durations.seconds(6),Durations.seconds(4)).print();
 		/* Implementing window operations*/
 		JavaDStream<String> lines = jssc.textFileStream("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination");
 		lines.print();
@@ -66,18 +62,77 @@ public class Analyser {
 		//stockStream.print();
 		//JavaPairDStream<String, PriceData> windowStockDStream = getWindowDStream(stockStream);
 		//JavaPairDStream<String, PriceData> windowStockDStream = StreamTransformer.getPDWindowDStream(stockStream);
+		
+		/**
+		 * Get Average Closing Price for Each Stock. 
+		 * Get Average Opening Price for each stock and then select the stock with maximum profit
+		 * @Param stockStream obtained by converting String into DSteramn of JavaDStream<Map<String, StockPrice>> 
+		 * @Return <String, Tuple2<PriceData, Long>> windowStockDStream 
+		 * @Operation windowStockDStream will be used to calculate JavaPairRDD<String, Double> stockAverageRdd in window.
+		 * 
+		 */
 		JavaPairDStream<String, Tuple2<PriceData, Long>> windowStockDStream = StreamTransformer.getStockPDandCountWindowDStream(stockStream);
 		
 		windowStockDStream.foreachRDD(rdd ->{
 			if(!rdd.isEmpty()) {
-				//rdd.saveAsTextFile("/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles");
-				//JavaPairRDD<String, Double> closingPriceRdd = Analyser.getActualPriceRdd(rdd, "close");
+				/* Average closing price of each stock */
 				JavaPairRDD<String,Tuple2<Double,Long>> closingPriceAndCountRdd = StreamTransformer.getActualPriceAndCounntRdd(rdd, "close");
 				closingPriceAndCountRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_Closinng_Count_" + System.currentTimeMillis());
 				JavaPairRDD<String, Double> stockAverageRdd = StreamTransformer.getAveragePriceRdd(closingPriceAndCountRdd);
 				stockAverageRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_AveragePrice_Closing" + System.currentTimeMillis());
+				
+				/*Calculating average opening price of each stock and then deciding with maximum profit*/
+				JavaPairRDD<String,Tuple2<Double,Long>> openingPriceAndCountRdd = StreamTransformer.getActualPriceAndCounntRdd(rdd, "open");
+				JavaPairRDD<String, Double> stockOpenPriceAverageRdd = StreamTransformer.getAveragePriceRdd(openingPriceAndCountRdd);
+				stockOpenPriceAverageRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_AveragePrice_Opening" + System.currentTimeMillis());
+				
+				/* Joining the average Closing Price and Opening price and calculating difference*/
+				JavaPairRDD<String,Tuple2<Double,Double>> stockClosingAvgAndOpeningAvgRdd = stockAverageRdd.join(stockOpenPriceAverageRdd);
+				JavaPairRDD<String,Double> stockAveragePriceDifference = StreamTransformer.getAveragePriceDifferenceRdd(stockClosingAvgAndOpeningAvgRdd);
+				stockAveragePriceDifference.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_AveragePrice_Difference_" + System.currentTimeMillis());
+				
+				
+				/*List<Tuple2<String, Double>> stockAveragePriceDifferenceList = stockAveragePriceDifference.top(1, new TupleSorter());
+				JavaRDD<Tuple2<String, Double>> stockAveragePriceDifferenceListRdd = jssc.sparkContext().parallelize(stockAveragePriceDifferenceList);
+				stockAveragePriceDifferenceListRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_ProfitLoss_Maximu_" + System.currentTimeMillis());*/
+				Tuple2<String, Double> stockAveragePriceDifferenceTuple = stockAveragePriceDifference.max(new TupleSorter());
+				
+				JavaPairRDD<String,Double> stockAveragePriceDifferenceMax = stockAveragePriceDifference.filter(new Function<Tuple2<String,Double>, Boolean>() {
+					
+					private static final long serialVersionUID = 1L;
+					
+					public Boolean call(Tuple2<String, Double> aStockAveragePriceDifference) throws Exception{
+						String symbol = aStockAveragePriceDifference._1;
+						String matchinngSignal = stockAveragePriceDifferenceTuple._1;
+						if(symbol.equalsIgnoreCase(matchinngSignal)) {
+							return true;
+						}else {
+							return false;
+						}
+					}
+				}
+				);
+				stockAveragePriceDifferenceMax.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_AveragePrice_Difference_Maximum" + System.currentTimeMillis());
+				//stockAveragePriceDifferenceList.saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_ProfitLoss_Maximu" + System.currentTimeMillis());
+				//JavaPairRDD.fromJavaRDD(arg0)
+				
 			}
 		});
+		
+		
+		
+		
+
+		/**
+		 * Get Stock with maximum  profit.
+		 * @Param stockStream obtained by converting String into DSteramn of JavaDStream<Map<String, StockPrice>> 
+		 * @Return <String, Tuple2<PriceData, Long>> windowStockDStream 
+		 * @Operation windowStockDStream will be used to calculate JavaPairRDD<String, Double> stockAverageRdd in window.
+		 * 
+		 */
+		
+		
+		
 		/*JavaPairDStream<Tuple2<String, PriceData>,Long> windowStockDStreamCount = Analyser.getWindowDStream(stockStream);
 		windowStockDStreamCount.foreachRDD(rdd ->{
 			if(!rdd.isEmpty()) {
@@ -87,7 +142,6 @@ public class Analyser {
 				
 			}
 		});*/
-		//windowStockDStream.saveAsHadoopFiles(prefix, suffix);
 		jssc.start();
 		jssc.awaitTermination();
 		jssc.close();

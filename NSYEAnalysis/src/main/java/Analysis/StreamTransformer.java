@@ -186,6 +186,27 @@ public class StreamTransformer {
 		return averagePriceRdd;
 	}
 	
+	public static JavaPairRDD<String, Double> getAveragePriceDifferenceRdd(JavaPairRDD<String, Tuple2<Double, Double>> aStockClosingAvgAndOpeningAvgRdd){
+		JavaPairRDD<String, Double> priceDifferenceRdd = aStockClosingAvgAndOpeningAvgRdd.mapToPair(new PairFunction<Tuple2<String,Tuple2<Double,Double>>, String, Double>() {
+			private static final long serialVersionUID = 1L;
+			
+			public Tuple2<String, Double> call(Tuple2<String, Tuple2<Double, Double>> aStockClosingAvgAndOpeningAvg) throws Exception{
+				String symbol = aStockClosingAvgAndOpeningAvg._1;
+				Double closingAvg = aStockClosingAvgAndOpeningAvg._2._1;
+				Double openingAvg = aStockClosingAvgAndOpeningAvg._2._2;
+				Double profitLoss = closingAvg-openingAvg;
+				
+				return new Tuple2<String, Double>(symbol, profitLoss);
+			}
+		}
+		
+		);
+		return priceDifferenceRdd;
+		
+	}
+	
+	
+	
 	public static Function2<Long, Long, Long>
 	SUM_REDUCER_COUNT = (a, b) -> {
 	return a+b;
@@ -195,5 +216,7 @@ public class StreamTransformer {
 	DIFF_REDUCER_COUNT = (a, b) -> {
 	return a-b;
 	};
+	
+	
 
 }
