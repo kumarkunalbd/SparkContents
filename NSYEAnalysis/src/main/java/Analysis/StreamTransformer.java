@@ -11,6 +11,7 @@ import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaPairDStream;
 
 import models.PriceData;
+import models.RSIData;
 import models.StockPrice;
 import scala.Tuple2;
 
@@ -254,6 +255,47 @@ public class StreamTransformer {
 	}
 	
 	
+	/*public static JavaPairDStream<String,Tuple2<PriceData, Long>> getRSIDataWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
+		
+		JavaPairDStream<String, Double> stockRSIDataMSFTStream = StreamTransformer.getVolumeDStream(stockStream, "MSFT");
+		JavaPairDStream<String, Double> stockRSIDataGoogleStream= StreamTransformer.getVolumeDStream(stockStream, "GOOGL");
+		JavaPairDStream<String, Double> stockRSIDataADBEStream = StreamTransformer.getVolumeDStream(stockStream, "ADBE");
+		JavaPairDStream<String, Double> stockRSIDataFBStream = StreamTransformer.getVolumeDStream(stockStream, "FB");
+		
+	}*/
+	
+	public static JavaPairDStream<String, RSIData> getRSIDataDStream(JavaDStream<Map<String, StockPrice>> stockStream,String symbol){
+		JavaPairDStream<String, RSIData> stockRSIDataDStream = stockStream.mapToPair(new PairFunction<Map<String, StockPrice>,String, RSIData>() {
+			/**
+			 * Adding serialization
+			 */
+			private static final long serialVersionUID = 1L;
+
+			public Tuple2<String, RSIData> call(Map<String, StockPrice> map) throws Exception {
+				if (map.containsKey(symbol)) {
+					RSIData anRsiData = new RSIData();
+					Double stockOpenPrice = map.get(symbol).getPriceData().getOpen();
+					Double stockClosePrice = map.get(symbol).getPriceData().getClose();
+					if(stockClosePrice >= stockOpenPrice) {
+						anRsiData.setGain(stockClosePrice-stockOpenPrice);
+					}else {
+						anRsiData.setLoss(stockOpenPrice-stockClosePrice);
+					}
+					Tuple2<String, RSIData> strRSIDataTuple = new Tuple2<String,RSIData>(symbol, anRsiData);
+					return strRSIDataTuple;
+					//return new Tuple2<String,PriceData>(symbol, map.get(symbol).getPriceData());
+				} else {
+					RSIData anRsiData = new RSIData();
+					Tuple2<String, RSIData> strRSIDataTuple = new Tuple2<String,RSIData>(symbol, anRsiData);
+					return strRSIDataTuple;
+					//return new Tuple2<String,PriceData>(symbol, new PriceData());
+				}
+			}
+		});
+
+		return stockRSIDataDStream;
+	}
+	
 	
 	public static Function2<Long, Long, Long>
 	SUM_REDUCER_COUNT = (a, b) -> {
@@ -273,6 +315,44 @@ public class StreamTransformer {
 	public static Function2<Double, Double, Double>
 	DIFF_REDUCER_VOLUME = (a, b) -> {
 	return a-b;
+	};
+	
+	public static Function2<RSIData, RSIData, RSIData>
+	SUM_REDUCER_RSI_DATA = (a, b) -> {
+	RSIData rsiData = new RSIData();
+	rsiData.setGain(a.getGain() + b.getGain());
+	rsiData.setLoss(a.getLoss() + b.getLoss());
+	rsiData.setAggregatedStockCounter(a.getAggregatedStockCounter() + b.getAggregatedStockCounter());
+	
+	if(rsiData.getAggregatedStockCounter() <= 9) {
+		rsiData.setAverageGain(rsiData.getGain()/rsiData.getAggregatedStockCounter());
+		rsiData.setAverageLoss(rsiData.getLoss()/rsiData.getAggregatedStockCounter());
+	}else {
+		System.out.println("Aggregated Stock Counter for presnent value is: "+ a.getAggregatedStockCounter());
+		System.out.println("Aggregated Stock Counter for incoming value is: "+ a.getAggregatedStockCounter());
+		Double incomingGain = b.getGain();
+		Double incomingLoss = b.getLoss();
+		Double previousAvgGain = a.getAverageGain();
+		Double previousAvgLoss = a.getAverageLoss();
+		Double newAvgGain = ((previousAvgGain*(rsiData.getAggregatedStockCounter()-1))+incomingGain)/(rsiData.getAggregatedStockCounter()-1);
+		Double newAvgLoss = ((previousAvgLoss*9)+incomingLoss)/10;
+		
+		rsiData.setAverageGain(newAvgGain);
+		rsiData.setAverageLoss(newAvgLoss);
+	}
+	
+	return rsiData;
+	};
+	
+	public static Function2<RSIData, RSIData, RSIData>
+	DIFF_REDUCER_RSI_DATA = (a, b) -> {
+		RSIData rsiData = new RSIData();
+		rsiData.setGain(a.getGain() + b.getGain());
+		rsiData.setLoss(a.getLoss() + b.getLoss());
+		rsiData.setAggregatedStockCounter(a.getAggregatedStockCounter() + b.getAggregatedStockCounter());
+		
+		return rsiData;
+	
 	};
 	
 	

@@ -145,6 +145,15 @@ public class Analyser {
 		);
 		
 		
+		/**
+		 * Get RSI of Stock in window(size =10minute, sliding=1minute)
+		 * @Operation windowStockDStream will be used to calculate JavaPairRDD<String, Tuple<Double,Double>> stockAggregated gains and losses in window(Size=10, sliding=1).
+		 * In the Tuple considered, the first double value is sum of all gains in window. The second Double value is of sum of all losses in window.
+		 * Losses would be positive.
+		 * 
+		 */
+		
+		JavaPairDStream<String, Tuple2<PriceData, Long>> windowStockSRIDStream = StreamTransformer.getStockPDandCountWindowDStream(stockStream);
 		
 		
 		
