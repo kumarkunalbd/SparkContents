@@ -25,8 +25,9 @@ public class StockKryoRegistrator implements KryoRegistrator, Serializable{
 	    doRegistration(arg0, "models.AveragePrice");
 	    doRegistration(arg0, "models.TupleSorter");
 	    doRegistration(arg0, "models.RSIData");
+	    doRegistration(arg0, "models.RSIDataAverage");
 	    
-	 
+	    
 	}
 	
 	

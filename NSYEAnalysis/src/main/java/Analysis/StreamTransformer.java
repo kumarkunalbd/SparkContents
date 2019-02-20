@@ -1,5 +1,6 @@
 package Analysis;
 
+import java.util.List;
 import java.util.Map;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -12,11 +13,14 @@ import org.apache.spark.streaming.api.java.JavaPairDStream;
 
 import models.PriceData;
 import models.RSIData;
+import models.RSIDataAverage;
 import models.StockPrice;
 import scala.Tuple2;
 
 public class StreamTransformer {
 	
+	private static int windowSIZE_default = 10;
+	private static int windowSIZE_RSI = 10;
 	
 	public static JavaPairDStream<String, PriceData> getPDWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
 		//JavaPairDStream< String, PriceData> stockPriceStream 
@@ -255,14 +259,56 @@ public class StreamTransformer {
 	}
 	
 	
-	/*public static JavaPairDStream<String,Tuple2<PriceData, Long>> getRSIDataWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
+	public static JavaPairDStream<String,Tuple2<RSIData, Long>> getRSIDataWindowDStream(JavaDStream<Map<String, StockPrice>> stockStream){
 		
-		JavaPairDStream<String, Double> stockRSIDataMSFTStream = StreamTransformer.getVolumeDStream(stockStream, "MSFT");
-		JavaPairDStream<String, Double> stockRSIDataGoogleStream= StreamTransformer.getVolumeDStream(stockStream, "GOOGL");
-		JavaPairDStream<String, Double> stockRSIDataADBEStream = StreamTransformer.getVolumeDStream(stockStream, "ADBE");
-		JavaPairDStream<String, Double> stockRSIDataFBStream = StreamTransformer.getVolumeDStream(stockStream, "FB");
+		JavaPairDStream<String, RSIData> stockRSIDataMSFTStream = StreamTransformer.getRSIDataDStream(stockStream, "MSFT");
+		JavaPairDStream<String, RSIData> stockRSIDataGoogleStream= StreamTransformer.getRSIDataDStream(stockStream, "GOOGL");
+		JavaPairDStream<String, RSIData> stockRSIDataADBEStream = StreamTransformer.getRSIDataDStream(stockStream, "ADBE");
+		JavaPairDStream<String, RSIData> stockRSIDataFBStream = StreamTransformer.getRSIDataDStream(stockStream, "FB");
 		
-	}*/
+		JavaPairDStream<String, Long> stockMSFTCounntStream = StreamTransformer.getStockCountDStream(stockStream, "MSFT");
+		JavaPairDStream<String, Long> stockGoogleCounntStream = StreamTransformer.getStockCountDStream(stockStream, "GOOGL");
+		JavaPairDStream<String, Long> stockADBECounntStream = StreamTransformer.getStockCountDStream(stockStream, "ADBE");
+		JavaPairDStream<String, Long> stockFBCounntStream = StreamTransformer.getStockCountDStream(stockStream, "FB");
+		
+		JavaPairDStream<String, RSIData> windowRSIMSFTDStream = stockRSIDataMSFTStream.reduceByKeyAndWindow(
+				StreamTransformer.SUM_REDUCER_RSI_DATA,
+				StreamTransformer.DIFF_REDUCER_RSI_DATA, Durations.minutes(10),
+				Durations.minutes(1));
+		JavaPairDStream<String, Long> windowMSFTDCountStream = stockMSFTCounntStream.reduceByKeyAndWindow(SUM_REDUCER_COUNT, DIFF_REDUCER_COUNT, Durations.minutes(windowSIZE_RSI), Durations.minutes(1));
+		//JavaPairDStream<String, Long> windowMSFTDCountStream = stockMSFTCounntStream.reduceByKeyAndWindow(SUM_REDUCER_COUNT, Durations.minutes(10), Durations.minutes(1));
+		JavaPairDStream<String, Tuple2<RSIData, Long>> windowRSIMSFTJoinedDStream= windowRSIMSFTDStream.join(windowMSFTDCountStream);
+		
+		JavaPairDStream<String, RSIData> windowRSIGoogleDStream = stockRSIDataGoogleStream.reduceByKeyAndWindow(
+				StreamTransformer.SUM_REDUCER_RSI_DATA,
+				StreamTransformer.DIFF_REDUCER_RSI_DATA, Durations.minutes(10),
+				Durations.minutes(1));
+		JavaPairDStream<String, Long> windowGoogleCountStream = stockGoogleCounntStream.reduceByKeyAndWindow(SUM_REDUCER_COUNT, DIFF_REDUCER_COUNT, Durations.minutes(windowSIZE_RSI), Durations.minutes(1));
+		//JavaPairDStream<String, Long> windowGoogleCountStream = stockGoogleCounntStream.reduceByKeyAndWindow(SUM_REDUCER_COUNT, Durations.minutes(10), Durations.minutes(1));
+		JavaPairDStream<String, Tuple2<RSIData, Long>> windowRSIGoogleJoinedDStream= windowRSIGoogleDStream.join(windowGoogleCountStream);
+		
+		JavaPairDStream<String, RSIData> windowRSIADBEStream = stockRSIDataADBEStream.reduceByKeyAndWindow(
+				StreamTransformer.SUM_REDUCER_RSI_DATA,
+				StreamTransformer.DIFF_REDUCER_RSI_DATA, Durations.minutes(10),
+				Durations.minutes(1));
+		JavaPairDStream<String, Long> windowADBECountStream = stockADBECounntStream.reduceByKeyAndWindow(SUM_REDUCER_COUNT, DIFF_REDUCER_COUNT, Durations.minutes(windowSIZE_RSI), Durations.minutes(1));
+		//JavaPairDStream<String, Long> windowADBECountStream = stockADBECounntStream.reduceByKeyAndWindow(SUM_REDUCER_COUNT, Durations.minutes(10), Durations.minutes(1));
+
+		JavaPairDStream<String, Tuple2<RSIData, Long>> windowRSIADBEJoinedDStream= windowRSIADBEStream.join(windowADBECountStream);
+		
+		JavaPairDStream<String, RSIData> windowRSIFBDStream = stockRSIDataFBStream.reduceByKeyAndWindow(
+				StreamTransformer.SUM_REDUCER_RSI_DATA,
+				StreamTransformer.DIFF_REDUCER_RSI_DATA, Durations.minutes(10),
+				Durations.minutes(1));
+		JavaPairDStream<String, Long> windowFBCountStream = stockFBCounntStream.reduceByKeyAndWindow(SUM_REDUCER_COUNT, DIFF_REDUCER_COUNT, Durations.minutes(windowSIZE_RSI), Durations.minutes(1));
+		//JavaPairDStream<String, Long> windowFBCountStream = stockFBCounntStream.reduceByKeyAndWindow(SUM_REDUCER_COUNT, Durations.minutes(10), Durations.minutes(1));
+		JavaPairDStream<String, Tuple2<RSIData, Long>> windowRSIFBJoinedDStream= windowRSIFBDStream.join(windowFBCountStream);
+		
+		windowRSIMSFTJoinedDStream = windowRSIMSFTJoinedDStream.union(windowRSIGoogleJoinedDStream).union(windowRSIADBEJoinedDStream).union(windowRSIFBJoinedDStream);
+		
+		return windowRSIMSFTJoinedDStream;
+		
+	}
 	
 	public static JavaPairDStream<String, RSIData> getRSIDataDStream(JavaDStream<Map<String, StockPrice>> stockStream,String symbol){
 		JavaPairDStream<String, RSIData> stockRSIDataDStream = stockStream.mapToPair(new PairFunction<Map<String, StockPrice>,String, RSIData>() {
@@ -296,6 +342,93 @@ public class StreamTransformer {
 		return stockRSIDataDStream;
 	}
 	
+	public static JavaPairRDD<String, RSIDataAverage> getRSIDataAverageRdd(JavaPairRDD<String, RSIDataAverage> previousWindowRSIDataAverageRdd,
+			JavaPairRDD<String, Tuple2<RSIData, Long>> currentWindowRSIDataRdd){
+		
+		JavaPairRDD<String, RSIDataAverage> rsiDataAverageRdd = currentWindowRSIDataRdd.mapToPair(new PairFunction<Tuple2<String,Tuple2<RSIData,Long>>, String, RSIDataAverage>() {
+			private static final long serialVersionUID = 1L;
+			
+			public Tuple2<String, RSIDataAverage> call(Tuple2<String, Tuple2<RSIData, Long>> anWindowRSIDataRdd) throws Exception{
+				
+				RSIData currentRSIData = anWindowRSIDataRdd._2._1;
+				String symbol = anWindowRSIDataRdd._1;
+				RSIDataAverage anRSIDataAverage = new RSIDataAverage();
+				if(previousWindowRSIDataAverageRdd != null) {
+					System.out.println("previous RSDIData set to NON NULL");
+					Map<String, RSIDataAverage> previousRSIDataAverageMap = previousWindowRSIDataAverageRdd.collectAsMap();
+					//System.out.println(previousRSIDataAverageMap);
+					
+					System.out.println("Calculation of new average begins");
+					Double previousaverageGain = previousRSIDataAverageMap.get(symbol).getAvregaeGain();
+					Double previousaverageLoss = previousRSIDataAverageMap.get(symbol).getAverageLoss();
+					Double newAverageGain = ((previousaverageGain*9)+currentRSIData.getGain())/10;
+					Double newAverageLoss = ((previousaverageLoss*9)+currentRSIData.getLoss())/10;
+					anRSIDataAverage.setAvregaeGain(newAverageGain);
+					anRSIDataAverage.setAverageLoss(newAverageLoss);
+					//anRSIDataAverage.setAvregaeGain();
+					Double rs = newAverageGain/newAverageLoss;
+					Double rsi = 100 - (100/(1+rs));
+					anRSIDataAverage.setFinalRSI(rsi);
+				}else if(previousWindowRSIDataAverageRdd == null) {
+					System.out.println("previous RSDIData set to NULL");
+					Double firstAverageGain = currentRSIData.getGain()/10;
+					Double firstAverageLoss = currentRSIData.getLoss()/10;
+					anRSIDataAverage.setAvregaeGain(firstAverageGain);
+					anRSIDataAverage.setAverageLoss(firstAverageLoss);
+					
+					Double rs = firstAverageGain/firstAverageLoss;
+					Double rsi = 100 - (100/(1+rs));
+					anRSIDataAverage.setFinalRSI(rsi);
+				}
+				
+				return new Tuple2<String, RSIDataAverage>(symbol, anRSIDataAverage);
+			}
+			
+		}
+		);
+		
+		return rsiDataAverageRdd;
+	}
+	
+	public static JavaPairRDD<String, Long> getWindowSlideCounterRSIDataAverageRdd(JavaPairRDD<String, Tuple2<RSIData, Long>> currentWindowRSIDataRdd){
+		
+		JavaPairRDD<String, Long> windowSlideCounterRdd = currentWindowRSIDataRdd.mapToPair(new PairFunction<Tuple2<String,Tuple2<RSIData,Long>>, String, Long>() {
+			private static final long serialVersionUID = 1L;
+			
+			public Tuple2<String, Long> call(Tuple2<String, Tuple2<RSIData, Long>> currentWindowRSIDataTuple) throws Exception{
+				Long slidingCounter = currentWindowRSIDataTuple._2._2;
+				String symbol = currentWindowRSIDataTuple._1;
+				
+				return new Tuple2<String, Long>(symbol, slidingCounter);
+			}
+		}
+		);
+		
+		return windowSlideCounterRdd;
+		
+	}
+	
+	
+	public static JavaPairRDD<String, Double> getRSIValueRdd(JavaPairRDD<String, Tuple2<RSIData, Long>> currentWindowRSIDataRdd){
+		
+		JavaPairRDD<String, Double> windowRsiValueRdd = currentWindowRSIDataRdd.mapToPair(new PairFunction<Tuple2<String,Tuple2<RSIData,Long>>, String,Double>() {
+			private static final long serialVersionUID = 1L;
+			
+			public Tuple2<String, Double> call(Tuple2<String, Tuple2<RSIData, Long>> currentWindowRSIDataTuple){
+				Double rsiValue = currentWindowRSIDataTuple._2._1.getRsi();
+				String symbol = currentWindowRSIDataTuple._1;
+				
+				return new Tuple2<String, Double>(symbol, rsiValue);
+			}
+		}
+		);
+		
+		return windowRsiValueRdd;
+		
+	}
+	
+	
+	
 	
 	public static Function2<Long, Long, Long>
 	SUM_REDUCER_COUNT = (a, b) -> {
@@ -320,40 +453,153 @@ public class StreamTransformer {
 	public static Function2<RSIData, RSIData, RSIData>
 	SUM_REDUCER_RSI_DATA = (a, b) -> {
 	RSIData rsiData = new RSIData();
-	rsiData.setGain(a.getGain() + b.getGain());
-	rsiData.setLoss(a.getLoss() + b.getLoss());
-	rsiData.setAggregatedStockCounter(a.getAggregatedStockCounter() + b.getAggregatedStockCounter());
 	
-	if(rsiData.getAggregatedStockCounter() <= 9) {
-		rsiData.setAverageGain(rsiData.getGain()/rsiData.getAggregatedStockCounter());
-		rsiData.setAverageLoss(rsiData.getLoss()/rsiData.getAggregatedStockCounter());
-	}else {
-		System.out.println("Aggregated Stock Counter for presnent value is: "+ a.getAggregatedStockCounter());
-		System.out.println("Aggregated Stock Counter for incoming value is: "+ a.getAggregatedStockCounter());
+	Long aggregatedStockCounterinWindow = a.getAggregatedStockCounter()+b.getAggregatedStockCounter();
+	System.out.println("SUM_Aggregated Stock Counter for presnent value is: "+ a.getAggregatedStockCounter());
+	System.out.println("SUM_Aggregated Stock Counter for incoming value is: "+ b.getAggregatedStockCounter());
+	
+	if(a.getAggregatedStockCounter() == (windowSIZE_RSI-1)) {
+		System.out.println("SUM_First Average gain is being calculated");
+		
+		Double aggregatedGain = a.getGain()+b.getGain();
+		Double aggregatedLoss = a.getLoss()+b.getLoss();
+		Double averageGain = aggregatedGain/10;
+		Double averageLoss = aggregatedLoss/10;
+		Double rs = averageGain/averageLoss;
+		Double rsi = 100 - (100/(1+rs));
+		
+		
+		System.out.println("aggGain:"+aggregatedGain+" aggLoss:"+aggregatedLoss+" avgGain:"+averageGain+" avgLoss:"+averageLoss
+				+" rs:"+rs+" rsi:"+rsi+" currentGain:"+a.getGain()+" currentLoss:"+a.getLoss()+" incmGain:"+b.getGain()+" inLoss:"+b.getLoss());
+		rsiData.setGain(aggregatedGain);
+		rsiData.setLoss(aggregatedLoss);
+		rsiData.setAverageGain(averageGain);
+		rsiData.setAverageLoss(averageLoss);
+		rsiData.setRsi(rsi);
+		
+	}else if(a.getAggregatedStockCounter() >= windowSIZE_RSI){
+		System.out.println("SUM_Seconnd time onward average gain is being calculated");
+		Double currentGain = a.getGain();
+		Double currentLoss = a.getLoss();
+	
 		Double incomingGain = b.getGain();
 		Double incomingLoss = b.getLoss();
 		Double previousAvgGain = a.getAverageGain();
 		Double previousAvgLoss = a.getAverageLoss();
-		Double newAvgGain = ((previousAvgGain*(rsiData.getAggregatedStockCounter()-1))+incomingGain)/(rsiData.getAggregatedStockCounter()-1);
-		Double newAvgLoss = ((previousAvgLoss*9)+incomingLoss)/10;
 		
-		rsiData.setAverageGain(newAvgGain);
-		rsiData.setAverageLoss(newAvgLoss);
+		Double newAverageGain = previousAvgGain*9+currentGain+incomingGain/10;
+		Double newAverageLoss = previousAvgLoss*9+currentLoss+incomingLoss/10;
+		
+		Double rs = newAverageGain/newAverageLoss;
+		Double rsi = 100 - (100/(1+rs));
+		
+		System.out.println("aggGain:"+(currentGain+incomingGain)+" aggLoss:"+(currentLoss+incomingLoss)+" avgGain:"+newAverageGain+" avgLoss:"+newAverageLoss
+				+" rs:"+rs+" rsi:"+rsi+" currentGain:"+currentGain+" currentLoss:"+currentLoss+" innGain:"+b.getGain()+" inLoss:"+b.getLoss());
+		
+		rsiData.setGain(currentGain+incomingGain);
+		rsiData.setLoss(currentLoss+incomingLoss);
+		rsiData.setAverageGain(newAverageGain);
+		rsiData.setAverageLoss(newAverageLoss);
+		rsiData.setRsi(rsi);
+	}else {
+		
+		Double aggregatedGain = a.getGain()+b.getGain();
+		Double aggregatedLoss = a.getLoss()+b.getLoss();
+		System.out.println("aggGain:"+aggregatedGain+" aggLoss:"+aggregatedLoss+" currentGain:"+a.getGain()+" currentLoss:"+a.getLoss()+" innGain:"+b.getGain()+" inLoss:"+b.getLoss());
+		rsiData.setGain(aggregatedGain);
+		rsiData.setLoss(aggregatedLoss);
+
 	}
+	
+	rsiData.setAggregatedStockCounter(aggregatedStockCounterinWindow);
 	
 	return rsiData;
 	};
 	
 	public static Function2<RSIData, RSIData, RSIData>
 	DIFF_REDUCER_RSI_DATA = (a, b) -> {
+	RSIData rsiData = new RSIData();
+	
+	//Long aggregatedStockCounterinWindow = a.getAggregatedStockCounter()-b.getAggregatedStockCounter();
+	Long aggregatedStockCounterinWindow = a.getAggregatedStockCounter();
+	System.out.println("DIFF_Aggregated Stock Counter for presnent value is: "+ a.getAggregatedStockCounter());
+	System.out.println("DIFF_Aggregated Stock Counter for outgoing value is: "+ b.getAggregatedStockCounter());
+	
+	if(a.getAggregatedStockCounter() == (windowSIZE_RSI-1)) {
+		System.out.println("DIFF_First Average gain is being calculated");
+		
+		Double aggregatedGain = a.getGain()-b.getGain();
+		Double aggregatedLoss = a.getLoss()-b.getLoss();
+		Double averageGain = aggregatedGain/10;
+		Double averageLoss = aggregatedLoss/10;
+		Double rs = averageGain/averageLoss;
+		Double rsi = 100 - (100/(1+rs));
+		
+		System.out.println("aggGain:"+aggregatedGain+" aggLoss:"+aggregatedLoss+" avgGain:"+averageGain+" avgLoss:"+averageLoss
+				+" rs:"+rs+" rsi:"+rsi+" currentGain:"+a.getGain()+" currentLoss:"+a.getLoss()+" outGain:"+b.getGain()+" outLoss:"+b.getLoss());
+		
+		rsiData.setGain(aggregatedGain);
+		rsiData.setLoss(aggregatedLoss);
+		rsiData.setAverageGain(averageGain);
+		rsiData.setAverageLoss(averageLoss);
+		rsiData.setRsi(rsi);
+		
+	}else if(a.getAggregatedStockCounter() >= windowSIZE_RSI){
+		System.out.println("DIFF_Seconnd time onward average gain is being calculated");
+		Double currentGain = a.getGain();
+		Double currentLoss = a.getLoss();
+	
+		Double outgoingGain = b.getGain();
+		Double outgoingLoss = b.getLoss();
+		Double previousAvgGain = a.getAverageGain();
+		Double previousAvgLoss = a.getAverageLoss();
+		
+		Double newAverageGain = previousAvgGain*9+currentGain-outgoingGain/10;
+		Double newAverageLoss = previousAvgLoss*9+currentLoss-outgoingLoss/10;
+		
+		Double rs = newAverageGain/newAverageLoss;
+		Double rsi = 100 - (100/(1+rs));
+		
+		System.out.println("aggGain:"+(currentGain-outgoingGain)+" aggLoss:"+(currentLoss-outgoingLoss)+" avgGain:"+newAverageGain+" avgLoss:"+newAverageLoss
+				+" rs:"+rs+" rsi:"+rsi+" currentGain:"+currentGain+" currentLoss:"+currentLoss+" outGain:"+b.getGain()+" outLoss:"+b.getLoss());
+		
+		rsiData.setGain(currentGain-outgoingGain);
+		rsiData.setLoss(currentLoss-outgoingLoss);
+		rsiData.setAverageGain(newAverageGain);
+		rsiData.setAverageLoss(newAverageLoss);
+		rsiData.setRsi(rsi);
+	}else {
+		
+		Double aggregatedGain = a.getGain()-b.getGain();
+		Double aggregatedLoss = a.getLoss()-b.getLoss();
+		System.out.println("aggGain:"+aggregatedGain+" aggLoss:"+aggregatedLoss+" currentGain:"+a.getGain()+" currentLoss:"+a.getLoss()+" outGain:"+b.getGain()+" outLoss:"+b.getLoss());
+		rsiData.setGain(aggregatedGain);
+		rsiData.setLoss(aggregatedLoss);
+
+	}
+	rsiData.setAggregatedStockCounter(aggregatedStockCounterinWindow);
+	
+	return rsiData;
+	};
+	
+	
+	/*public static Function2<RSIData, RSIData, RSIData>
+	SUM_REDUCER_RSI_DATA = (a, b) -> {
 		RSIData rsiData = new RSIData();
 		rsiData.setGain(a.getGain() + b.getGain());
 		rsiData.setLoss(a.getLoss() + b.getLoss());
-		rsiData.setAggregatedStockCounter(a.getAggregatedStockCounter() + b.getAggregatedStockCounter());
-		
 		return rsiData;
 	
 	};
+	
+	public static Function2<RSIData, RSIData, RSIData>
+	DIFF_REDUCER_RSI_DATA = (a, b) -> {
+		RSIData rsiData = new RSIData();
+		rsiData.setGain(a.getGain() - b.getGain());
+		rsiData.setLoss(a.getLoss() - b.getLoss());
+		return rsiData;
+	
+	};*/
 	
 	
 	

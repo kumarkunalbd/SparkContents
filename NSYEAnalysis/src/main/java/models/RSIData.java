@@ -1,12 +1,21 @@
 package models;
 
 public class RSIData {
+	private static final long serialVersionUID = 1L;
+	
 	private double gain =0.0;
 	private double loss = 0.0;
 	private long aggregatedStockCounter = 1;
 	private double averageGain = 0;
 	private double averageLoss = 0;
+	private double rsi =0;
 	
+	public double getRsi() {
+		return rsi;
+	}
+	public void setRsi(double rsi) {
+		this.rsi = rsi;
+	}
 	public double getGain() {
 		return gain;
 	}

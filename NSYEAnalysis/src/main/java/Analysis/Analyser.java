@@ -22,6 +22,8 @@ import models.TupleSorter;
 
 import models.AveragePrice;
 import models.PriceData;
+import models.RSIData;
+import models.RSIDataAverage;
 import models.StockPrice;
 import scala.Tuple2;
 
@@ -38,7 +40,8 @@ public class Analyser {
 	public static void main(String[] args) throws InterruptedException{
 		// TODO Auto-generated method stub
 		String inputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/Scripts_Shell/destination";
-        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles8";
+        String outputPathFiles = "/Users/kumarkunal/Upgrad_materials/Course5-Mod7-SparkStream/SparkProjects/OutputFiles14";
+        String lastRSIDataAvergaeRddKeyname = "lastRSIDataAvergaeRdd";
 		SparkConf confInitial = new SparkConf().setMaster("local[*]").setAppName("StockAnalyser");
 		
 		/**
@@ -153,7 +156,34 @@ public class Analyser {
 		 * 
 		 */
 		
-		JavaPairDStream<String, Tuple2<PriceData, Long>> windowStockSRIDStream = StreamTransformer.getStockPDandCountWindowDStream(stockStream);
+		JavaPairDStream<String, Tuple2<RSIData, Long>> windowStockRSIDStream = StreamTransformer.getRSIDataWindowDStream(stockStream);
+		//JavaPairRDD<String, RSIDataAverage> previousWindowRSIDataAverageRdd = null;
+		//RSIDataAverage previousRSIDataAvergae = null;
+		HashMap<String, JavaPairRDD<String, RSIDataAverage>> anHashRSIDataAverageMap = new HashMap<String, JavaPairRDD<String, RSIDataAverage>>();
+		windowStockRSIDStream.foreachRDD(rdd ->{
+			if(!rdd.isEmpty()) {
+				
+				/*Map<String, Tuple2<RSIData,Long>> aMap = rdd.collectAsMap();
+				long totalSlideCounter = aMap.get("MSFT")._2;
+ 				if(totalSlideCounter == 10 && anHashRSIDataAverageMap.get(lastRSIDataAvergaeRddKeyname) == null) {
+					JavaPairRDD<String, RSIDataAverage> windowRSIDataAverageRdd = StreamTransformer.getRSIDataAverageRdd(null, rdd);
+					anHashRSIDataAverageMap.put(lastRSIDataAvergaeRddKeyname, windowRSIDataAverageRdd);
+					windowRSIDataAverageRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_RSIDATA_Average_First_" + System.currentTimeMillis());
+				}else if(totalSlideCounter == 10 && anHashRSIDataAverageMap.get(lastRSIDataAvergaeRddKeyname) != null){
+					JavaPairRDD<String, RSIDataAverage> previousWindowRSIDataAverageRdd = anHashRSIDataAverageMap.get(lastRSIDataAvergaeRddKeyname);
+					JavaPairRDD<String, RSIDataAverage> windowRSIDataAverageRdd = StreamTransformer.getRSIDataAverageRdd(previousWindowRSIDataAverageRdd, rdd);
+					anHashRSIDataAverageMap.put(lastRSIDataAvergaeRddKeyname, windowRSIDataAverageRdd);
+					windowRSIDataAverageRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_RSIDATA_Average_Socond_Onwards_" + System.currentTimeMillis());
+				}else if(totalSlideCounter < 10) {
+					rdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_RSIDATA_Before_WindowSize_" + System.currentTimeMillis());
+				}*/
+				
+				JavaPairRDD<String, Double> windowRSIValueRdd = StreamTransformer.getRSIValueRdd(rdd);
+				windowRSIValueRdd.coalesce(1).saveAsTextFile(outputPathFiles + java.io.File.separator + "windowUnionStocks_RSI_Values_" + System.currentTimeMillis());
+				
+			}
+			
+		});
 		
 		
 		
